@@ -1,0 +1,150 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum OAuthProvider {
+  GOOGLE
+}
+
+enum RoleName {
+  USER
+  ADMIN
+}
+
+model User {
+  id                    String                  @id @default(uuid())
+  email                 String                  @unique
+  passwordHash          String?
+  status                UserStatus              @default(ACTIVE)
+  isEmailVerified       Boolean                 @default(false)
+  lastLoginAt           DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  sessions              Session[]
+  userRoles             UserRole[]
+  oauthAccounts         OAuthAccount[]
+
+  @@index([status])
+}
+
+model OAuthAccount {
+  id                    String                  @id @default(uuid())
+  userId                String
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider              OAuthProvider
+  providerAccountId     String
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  // Same provider account
+  // cannot be linked twice.
+  @@unique([provider, providerAccountId])
+  @@unique([userId])
+}
+
+model Session {
+  id                    String                  @id @default(uuid())
+  userId                String
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash      String
+
+  deviceName            String?
+  userAgent             String?
+  ipAddress             String?
+
+  expiresAt             DateTime
+  revokedAt             DateTime?
+  
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  refreshTokens         RefreshToken[]
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model RefreshToken {
+  id                    String                  @id @default(uuid())
+  sessionId             String
+  session               Session                 @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tokenHash             String                  @unique
+  familyId              String
+  expiresAt             DateTime
+  revokedAt             DateTime?
+  replacedById          String?
+  createdAt             DateTime                @default(now())
+
+  @@index([sessionId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model Role {
+  id                    String                  @id @default(uuid())
+  name                  RoleName                @unique
+  description           String?
+
+  isSystem              Boolean                 @default(false)
+  deletedAt             DateTime? 
+
+  createdAt             DateTime?               @default(now())
+  updatedAt             DateTime?               @updatedAt
+
+  userRoles             UserRole[]
+  rolePermissions       RolePermission[]
+
+  @@index([deletedAt])
+}
+
+model Permission {
+  id                    String                  @id @default(uuid())
+  name                  String                  @unique
+  description           String?
+
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime?               @updatedAt
+
+  rolePermissions       RolePermission[]
+}
+
+model UserRole {
+  userId                String
+  roleId                String
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                  Role                    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt            DateTime                @default(now())
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId               String
+  permissionId         String
+  role                 Role                     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission           Permission               @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedAt           DateTime                 @default(now())
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
