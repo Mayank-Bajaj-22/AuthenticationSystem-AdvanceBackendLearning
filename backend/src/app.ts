@@ -25,3 +25,15 @@ app.get("/health-check", (req: Request, res: Response) => {
         message: "Health is fine",
     });
 });
+
+import authRouter from "./modules/auth/auth.route.js";
+import { AppError } from "./utils/common/errors/AppError.js";
+import { globalErrorHandler } from "./common/middlewares/error.middleware.js";
+
+app.use("/api/v1/auth", authRouter);
+
+app.use((req, res, next) => {
+    next(new AppError(`Cannot find ${req.originalUrl} on this server`, 404));
+});
+
+app.use(globalErrorHandler);

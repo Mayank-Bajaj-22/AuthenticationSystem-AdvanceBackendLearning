@@ -1,10 +1,10 @@
 import { Response } from "express";
-import { ApiResponnse } from "../../../types/index.js";
+import { ApiResponse } from "../../../types/index.js";
 
 export const sendResponse = <T>(
     res: Response,
     statusCode: number,
-    payload: ApiResponnse<T>,
+    payload: ApiResponse<T>,
 ) => {
     return res.status(statusCode).json(payload);
 };
