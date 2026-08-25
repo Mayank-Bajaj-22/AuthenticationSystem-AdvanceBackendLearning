@@ -1,8 +1,9 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import { CatchAsync } from "../../utils/common/helpers/CatchAsync.js";
 import { authService } from "./auth.container.js";
 import { sendResponse } from "../../utils/common/response/AppResponse.js";
 import { setCookies } from "../../utils/auth/auth.helper.js";
+import { AppError } from "../../utils/common/errors/AppError.js";
 
 export const registerUserController = CatchAsync(
     async (req: Request, res: Response) => {
@@ -58,6 +59,27 @@ export const loginUserController = CatchAsync(
                 user: result.user,
                 accessToken: result.accessToken,
             },
+        });
+    },
+);
+
+export const loggedInUserController = CatchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const user = req.user;
+
+        if (!user) {
+            throw new AppError(
+                "User not found",
+                404,
+            );
+        }
+
+        const result = await authService.getLoggerInUser(user);
+        
+        sendResponse(res, 200, {
+            success: true,
+            message: "User fetched successfully",
+            data: result,
         });
     },
 );

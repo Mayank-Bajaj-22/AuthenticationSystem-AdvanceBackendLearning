@@ -1,7 +1,6 @@
 import { env } from "../../config/env.config.js";
-import { JWTPayload } from "../../modules/auth/auth.types.js";
+import { AccessTokenPayload, JWTPayload, RefreshTokenPayload } from "../../modules/auth/auth.types.js";
 import jwt, { SignOptions } from "jsonwebtoken";
-import { AccessTokenPayload, RefreshTokenPayload } from "../../types/index.js";
 
 export const signAccessToken = (payload: JWTPayload) => {
     return jwt.sign(payload, env.ACCESS_TOKEN_SECRET, {

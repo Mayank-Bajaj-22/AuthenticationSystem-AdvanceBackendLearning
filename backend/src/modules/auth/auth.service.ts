@@ -6,6 +6,7 @@ import { comparePassword, hashPassword } from "../../utils/auth/password.js";
 import { AppError } from "../../utils/common/errors/AppError.js";
 import { IAuthRepository } from "./auth.interface.js";
 import { sanitizedUserResponse } from "./auth.response.js";
+import { UserType } from "./auth.types.js";
 
 export class AuthService {
     constructor(
@@ -21,12 +22,12 @@ export class AuthService {
         const sessionId = generateSessionId();
 
         const accessToken = signAccessToken({
-            sub: sessionId,
+            sub: userId,
             sessionId,
         });
 
         const refreshToken = signRefreshToken({
-            sub: sessionId,
+            sub: userId,
             sessionId,
         });
 
@@ -45,7 +46,6 @@ export class AuthService {
         await this.authRepo.createSession({
             id: sessionId,
             userId: userId,
-            refreshTokenHash: hashedRefreshToken,
             deviceName: deviceName,
             userAgent: userAgent,
             ipAddress: ipAddress,
@@ -134,5 +134,21 @@ export class AuthService {
             user: sanitizedUserResponse(existingUser),
             ...authSession,
         };
+    }
+
+    async getLoggerInUser(
+        data: UserType,
+    ) {
+        const user =
+            await this.authRepo.findUserById(data.userId);
+
+        if (!user) {
+            throw new AppError(
+                "User not found",
+                404,
+            );
+        }
+
+        return user;
     }
 }
