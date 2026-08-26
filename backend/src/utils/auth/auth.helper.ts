@@ -11,6 +11,14 @@ export const generateSessionId = () => {
     return crypto.randomUUID();
 };
 
+export const generateTokenId = () => {
+    return crypto.randomUUID();
+};
+
+export const generateFamilyId = () => {
+    return crypto.randomUUID();
+};
+
 const refreshTokenMaxAge = ms(env.REFRESH_TOKEN_EXPIRES_IN as ms.StringValue);
 
 if (typeof refreshTokenMaxAge !== "number") {

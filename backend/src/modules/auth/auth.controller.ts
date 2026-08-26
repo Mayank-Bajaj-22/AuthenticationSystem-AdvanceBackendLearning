@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from "express";
+import { Request, Response } from "express";
 import { CatchAsync } from "../../utils/common/helpers/CatchAsync.js";
 import { authService } from "./auth.container.js";
 import { sendResponse } from "../../utils/common/response/AppResponse.js";
@@ -64,7 +64,7 @@ export const loginUserController = CatchAsync(
 );
 
 export const loggedInUserController = CatchAsync(
-    async (req: Request, res: Response, next: NextFunction) => {
+    async (req: Request, res: Response) => {
         const user = req.user;
 
         if (!user) {
@@ -80,6 +80,31 @@ export const loggedInUserController = CatchAsync(
             success: true,
             message: "User fetched successfully",
             data: result,
+        });
+    },
+);
+
+export const refreshAccessTokenController = CatchAsync(
+    async (req: Request, res: Response) => {
+        const refreshToken = req.cookies.refreshToken;
+
+        if (!refreshToken) {
+            throw new AppError(
+                "Refresh token is required",
+                401,
+            );
+        }
+
+        const result = await authService.refreshAccessToken(refreshToken);
+
+        setCookies(res, result.refreshToken);
+
+        sendResponse(res, 200, {
+            success: true,
+            message: "Token refreshed successfully",
+            data: {
+                accessToken: result.accessToken,
+            },
         });
     },
 );

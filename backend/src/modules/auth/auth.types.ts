@@ -3,11 +3,6 @@ export type CreateUserType = {
     hashedPassword: string | null;
 }
 
-export type JWTPayload = {
-    sub: string;
-    sessionId: string;
-};
-
 export type CreateSessionType = {
     id: string;
     userId: string;

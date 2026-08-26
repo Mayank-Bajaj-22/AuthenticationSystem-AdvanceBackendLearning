@@ -1,7 +1,7 @@
-import { Session, User } from "../../../generated/prisma/index.js";
+import { RefreshToken, Session, User } from "../../../generated/prisma/index.js";
 import { prisma } from "../../lib/prisma.js";
 import { IAuthRepository } from "./auth.interface.js";
-import { CreateSessionType, CreateUserType, FindUserByIdType } from "./auth.types.js";
+import { CreateRefreshTokenType, CreateSessionType, CreateUserType, FindUserByIdType } from "./auth.types.js";
 
 export class AuthRepository implements IAuthRepository {
     async findUserByEmail(
@@ -54,5 +54,84 @@ export class AuthRepository implements IAuthRepository {
         });
 
         return user;
+    }
+
+    async createRefreshToken(
+        data: CreateRefreshTokenType
+    ): Promise<RefreshToken> {
+        const createdRefreshToken = await prisma.refreshToken.create({
+            data,
+        });
+
+        return createdRefreshToken;
+    }
+
+    async findRefreshTokenById(
+        id: string
+    ): Promise<RefreshToken | null> {
+        const refreshToken = await prisma.refreshToken.findUnique({
+            where: {
+                id,
+            },
+        });
+
+        return refreshToken;
+    }
+
+    async revokeRefreshToken(
+        tokenId: string, 
+        replacedById?: string
+    ): Promise<void> {
+        await prisma.refreshToken.update({
+            where: {
+                id: tokenId,
+            },
+            data: {
+                revokedAt: new Date(),
+                replacedById,
+            },
+        });
+    }
+
+    async revokeTokenFamily(
+        familyId: string
+    ): Promise<void> {
+        await prisma.refreshToken.updateMany({
+            where: {
+                familyId,
+                revokedAt: null,
+            },
+            data: {
+                revokedAt: new Date(),
+            },
+        });
+    }
+
+    async rotateRefreshToken(
+        oldTokenId: string, 
+        newToken: CreateRefreshTokenType
+    ): Promise<void> {
+        await prisma.$transaction(async (tx) => {
+            const revoked = await tx.refreshToken.updateMany({
+                where: {
+                    id: oldTokenId,
+                    revokedAt: null,
+                },
+                data: {
+                    revokedAt: new Date(),
+                    replacedById: newToken.id,
+                },
+            });
+
+            if (revoked.count !== 1) {
+                throw new Error(
+                    "Refresh token has already been revoked",
+                );
+            }
+
+            await tx.refreshToken.create({
+                data: newToken,
+            });
+        });
     }
 }

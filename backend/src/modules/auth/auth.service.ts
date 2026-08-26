@@ -1,7 +1,7 @@
 import ms from "ms";
 import { env } from "../../config/env.config.js";
-import { generateSessionId, hashRefreshToken } from "../../utils/auth/auth.helper.js";
-import { signAccessToken, signRefreshToken } from "../../utils/auth/jwt.js";
+import { generateFamilyId, generateSessionId, generateTokenId, hashRefreshToken } from "../../utils/auth/auth.helper.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/auth/jwt.js";
 import { comparePassword, hashPassword } from "../../utils/auth/password.js";
 import { AppError } from "../../utils/common/errors/AppError.js";
 import { IAuthRepository } from "./auth.interface.js";
@@ -20,18 +20,24 @@ export class AuthService {
         ipAddress: string,
     ) {
         const sessionId = generateSessionId();
+        const tokenId = generateTokenId();
+        const familyId = generateFamilyId();
 
         const accessToken = signAccessToken({
             sub: userId,
             sessionId,
+            type: "access",
         });
 
         const refreshToken = signRefreshToken({
             sub: userId,
             sessionId,
+            tokenId,
+            familyId,
+            type: "refresh",
         });
 
-        const hashedRefreshToken = hashRefreshToken(refreshToken);
+        const tokenHash = hashRefreshToken(refreshToken);
 
         const refreshTokenExpiresIn = ms(
             env.REFRESH_TOKEN_EXPIRES_IN as ms.StringValue,
@@ -45,10 +51,18 @@ export class AuthService {
 
         await this.authRepo.createSession({
             id: sessionId,
-            userId: userId,
-            deviceName: deviceName,
-            userAgent: userAgent,
-            ipAddress: ipAddress,
+            userId,
+            deviceName,
+            userAgent,
+            ipAddress,
+            expiresAt,
+        });
+
+        await this.authRepo.createRefreshToken({
+            id: tokenId,
+            sessionId,
+            tokenHash,
+            familyId,
             expiresAt,
         });
 
@@ -71,7 +85,7 @@ export class AuthService {
         if (existingUser) {
             throw new AppError(
                 "User with this email already exists!",
-                400,
+                409,
             );
         }
 
@@ -123,11 +137,18 @@ export class AuthService {
             );
         }
 
+        if (existingUser.status !== "ACTIVE") {
+            throw new AppError(
+                "User account is not active",
+                403,
+            );
+        }
+
         const authSession = await this.createAuthenticatedSession(
             existingUser.id,
             data.deviceName,
             data.userAgent,
-            data.userAgent,
+            data.ipAddress,
         );
 
         return {
@@ -150,5 +171,161 @@ export class AuthService {
         }
 
         return user;
+    }
+
+    async refreshAccessToken(
+        refreshToken: string,
+    ) {
+        let payload;
+
+        // 1. verify jwt
+        try {
+            payload = verifyRefreshToken(refreshToken);
+        } catch (error) {
+            throw new AppError(
+                "Invalid or expired refresh token",
+                401,
+            );
+        }
+
+        // 2. find token in db
+        const storedToken = 
+            await this.authRepo.findRefreshTokenById(
+                payload.tokenId,
+            );
+
+        if (!storedToken) {
+            throw new AppError(
+                "Invalid refresh token",
+                401,
+            );
+        }
+
+        // 3. check token family
+        if (storedToken.familyId !== payload.familyId) {
+            await this.authRepo.revokeTokenFamily(
+                storedToken.familyId,
+            );
+
+            throw new AppError(
+                "Refresh token family mismatch",
+                401,
+            );
+        }
+
+        // 4. check session
+        if (storedToken.sessionId !== payload.sessionId) {
+            await this.authRepo.revokeTokenFamily(
+                storedToken.familyId,
+            );
+
+            throw new AppError(
+                "Refresh token session mismatch",
+                401,
+            );
+        }
+
+        // 5. replay detection
+        if (storedToken.revokedAt) {
+            await this.authRepo.revokeTokenFamily(
+                storedToken.familyId,
+            );
+
+            throw new AppError(
+                "Refresh token reuse detected",
+                401,
+            );
+        }
+
+        // 6. check db expiration
+        if (storedToken.expiresAt.getTime() <= Date.now()) {
+            throw new AppError(
+                "Refresh token expired",
+                401,
+            );
+        }
+
+        // 7. hash incoming token
+        const incomingToken = hashRefreshToken(refreshToken);
+
+        // 8. compare hash
+        if (incomingToken !== storedToken.tokenHash) {
+            await this.authRepo.revokeTokenFamily(
+                storedToken.familyId,
+            );
+
+            throw new AppError(
+                "Invalid refresh token",
+                401,
+            );
+        }
+
+        // 9. create new token
+        const newTokenId = generateTokenId();
+
+        const familyId = storedToken.familyId;
+        const sessionId = storedToken.sessionId;
+
+        const accessToken = signAccessToken({
+            sub: payload.sub,
+            sessionId,
+            type: "access",
+        });
+
+        const newRefreshToken = signRefreshToken({
+            sub: payload.sub,
+            sessionId,
+            tokenId: newTokenId,
+            familyId,
+            type: "refresh",
+        });
+
+        const newTokenHash = hashRefreshToken(newRefreshToken);
+
+        // 10. new expiration
+        const refreshTokenExpiresIn = ms(
+            env.REFRESH_TOKEN_EXPIRES_IN as ms.StringValue,
+        );
+
+        if (typeof refreshTokenExpiresIn !== "number") {
+            throw new Error(
+                "Invalid refresh token expiry configuration",
+            );
+        }
+
+        const newExpiresAt = new Date(Date.now() + refreshTokenExpiresIn);
+
+        // 11. atomic rotation
+        try {
+            await this.authRepo.rotateRefreshToken(
+                storedToken.id,
+                {
+                    id: newTokenId,
+                    sessionId,
+                    tokenHash: newTokenHash,
+                    familyId,
+                    expiresAt: newExpiresAt,
+                },
+            );
+        } catch (error) {
+            // Another request may have already
+            // consumed this refresh token.
+
+            await this.authRepo.revokeTokenFamily(
+                familyId,
+            );
+
+            throw new AppError(
+                "Refresh token reuse detected",
+                401,
+            );
+        }
+
+        // 12. return tokens
+        return {
+            accessToken,
+            refreshToken:
+                newRefreshToken,
+        };
     }
 }
