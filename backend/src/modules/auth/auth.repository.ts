@@ -1,7 +1,7 @@
 import { RefreshToken, Session, User } from "../../../generated/prisma/index.js";
 import { prisma } from "../../lib/prisma.js";
 import { IAuthRepository } from "./auth.interface.js";
-import { CreateRefreshTokenType, CreateSessionType, CreateUserType, FindUserByIdType } from "./auth.types.js";
+import { CreateRefreshTokenType, CreateSessionType, CreateUserType, FindUserByIdType, SessionWithRefreshTokensType } from "./auth.types.js";
 
 export class AuthRepository implements IAuthRepository {
     async findUserByEmail(
@@ -133,5 +133,88 @@ export class AuthRepository implements IAuthRepository {
                 data: newToken,
             });
         });
+    }
+
+    async findSessionById(
+        sessionId: string
+    ): Promise<SessionWithRefreshTokensType | null> {
+        return prisma.session.findUnique({
+            where: {
+                id: sessionId,
+            },
+            select: {
+                id: true,
+                userId: true,
+                expiresAt: true,
+                revokedAt: true,
+                refreshTokens: {
+                    select: {
+                        id: true,
+                        revokedAt: true,
+                    },
+                },
+            },
+        });
+    }
+
+    async revokeSession(
+        sessionId: string
+    ): Promise<void> {
+        const now = new Date();
+
+        await prisma.$transaction([
+            // revoke session
+            prisma.session.update({
+                where: {
+                    id: sessionId,
+                },
+                data: {
+                    revokedAt: now,
+                },
+            }),
+
+            // revoke all refresh tokens belonging to this session
+            prisma.refreshToken.updateMany({
+                where: {
+                    sessionId,
+                    revokedAt: null,
+                },
+                data: {
+                    revokedAt: now,
+                },
+            }),
+        ]);
+    }
+
+    async revokeAllUserSessions(
+        userId: string
+    ): Promise<void> {
+        const now = new Date();
+
+        await prisma.$transaction([
+            // revoke all sessions
+            prisma.session.updateMany({
+                where: {
+                    userId,
+                    revokedAt: null,
+                },
+                data: {
+                    revokedAt: now,
+                },
+            }),
+
+            // revoke all refresh tokens belonging to user sessions
+            prisma.refreshToken.updateMany({
+                where: {
+                    session: {
+                        userId,
+                    },
+                    revokedAt: null,
+                },
+                data: {
+                    revokedAt: now,
+                },
+            }),
+        ]);
     }
 }

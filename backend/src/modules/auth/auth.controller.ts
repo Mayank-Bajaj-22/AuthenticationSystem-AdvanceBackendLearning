@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { CatchAsync } from "../../utils/common/helpers/CatchAsync.js";
 import { authService } from "./auth.container.js";
 import { sendResponse } from "../../utils/common/response/AppResponse.js";
-import { setCookies } from "../../utils/auth/auth.helper.js";
+import { clearCookies, setCookies } from "../../utils/auth/auth.helper.js";
 import { AppError } from "../../utils/common/errors/AppError.js";
 
 export const registerUserController = CatchAsync(
@@ -105,6 +105,87 @@ export const refreshAccessTokenController = CatchAsync(
             data: {
                 accessToken: result.accessToken,
             },
+        });
+    },
+);
+
+export const logoutController = CatchAsync(
+    async (req: Request, res: Response) => {
+        const user = req.user;
+
+        if (!user) {
+            throw new AppError(
+                "Authentication required",
+                401,
+            );
+        }
+
+        await authService.logoutCurrentSession(
+            user.userId,
+            user.sessionId,
+        );
+
+        clearCookies(res);
+
+        sendResponse(res, 200, {
+            success: true,
+            message: "Logged out successfully",
+        });
+    },
+);
+
+export const logoutAllSessionsController = CatchAsync(
+    async (req: Request, res: Response) => {
+        const user = req.user;
+
+        if (!user) {
+            throw new AppError(
+                "Authentication required",
+                401,
+            );
+        }
+
+        await authService.logoutAllSessions(
+            user.userId,
+        );
+
+        clearCookies(res);
+
+        sendResponse(res, 200, {
+            success: true,
+            message: "Logged out from all sessions successfully",
+        });
+    },
+);
+
+export const revokeSessionContoller = CatchAsync(
+    async(req: Request, res: Response) => {
+        const user = req.user;
+
+        if (!user) {
+            throw new AppError(
+                "Authentication required",
+                401,
+            );
+        }
+
+        const sessionId = req.params.sessionId as string;
+
+        if (!sessionId) {
+            throw new AppError(
+                "Session ID is required",
+                400,
+            );
+        }
+
+        await authService.logoutCurrentSession(
+            user.userId,
+            sessionId,
+        );
+
+        sendResponse(res, 200, {
+            success: true,
+            message: "Session revoked successfully",
         });
     },
 );

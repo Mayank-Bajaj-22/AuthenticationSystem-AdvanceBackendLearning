@@ -5,7 +5,7 @@ export const sanitizedUserResponse = (user: User) => {
         id: user.id,
         email: user.email,
         isEmailVerified: user.isEmailVerified,
-        provider: user.provider,
+        status: user.status,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
     };

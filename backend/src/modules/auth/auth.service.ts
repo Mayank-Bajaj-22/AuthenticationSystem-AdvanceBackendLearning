@@ -328,4 +328,42 @@ export class AuthService {
                 newRefreshToken,
         };
     }
+
+    async logoutCurrentSession(
+        userId: string,
+        sessionId: string,
+    ): Promise<void> {
+        const session = 
+            await this.authRepo.findSessionById(sessionId);
+
+        if (!session) {
+            throw new AppError(
+                "Session not found",
+                404,
+            );
+        }
+
+        if (session.userId !== userId) {
+            throw new AppError(
+                "You are not authorized to revoke this session",
+                403,
+            );
+        }
+
+        if (session.revokedAt) {
+            return;
+        }
+
+        await this.authRepo.revokeSession(
+            sessionId,
+        );
+    }
+
+    async logoutAllSessions(
+        userId: string,
+    ): Promise<void> {
+        await this.authRepo.revokeAllUserSessions(
+            userId,
+        );
+    }
 }

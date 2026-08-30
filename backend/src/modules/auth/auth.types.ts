@@ -44,3 +44,14 @@ export type RefreshTokenPayload = {
     familyId: string;
     type: "refresh";
 };
+
+export type SessionWithRefreshTokensType = {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+    revokedAt: Date | null;
+    refreshTokens: {
+        id: string;
+        revokedAt: Date | null;
+    }[];
+};

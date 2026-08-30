@@ -4,8 +4,11 @@ import { loginUserSchema, registerUserSchema } from "./auth.schema.js";
 import {
   loggedInUserController,
   loginUserController,
+  logoutAllSessionsController,
+  logoutController,
   refreshAccessTokenController,
   registerUserController,
+  revokeSessionContoller,
 } from "./auth.controller.js";
 import { authMiddleware } from "../../middlewares/authentication.middleware.js";
 
@@ -26,5 +29,17 @@ router
 router
   .route("/refresh-token")
   .post(refreshAccessTokenController);
+
+router
+  .route("/logout")
+  .post(authMiddleware, logoutController);
+
+router
+  .route("/logout-all")
+  .post(authMiddleware, logoutAllSessionsController);
+
+router
+  .route("/sessions/:sessionId")
+  .delete(authMiddleware, revokeSessionContoller);
 
 export default router;

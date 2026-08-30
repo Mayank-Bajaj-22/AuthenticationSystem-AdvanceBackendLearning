@@ -1,5 +1,5 @@
 import { User, Session, RefreshToken } from "../../../generated/prisma/index.js";
-import { CreateRefreshTokenType, CreateSessionType, CreateUserType, FindUserByIdType } from "./auth.types.js";
+import { CreateRefreshTokenType, CreateSessionType, CreateUserType, FindUserByIdType, SessionWithRefreshTokensType } from "./auth.types.js";
 
 export interface IAuthRepository {
     findUserByEmail(email: string) : Promise<User | null>;
@@ -17,4 +17,7 @@ export interface IAuthRepository {
         oldTokenId: string,
         newToken: CreateRefreshTokenType,
     ) : Promise<void>;
+    findSessionById(sessionId: string) : Promise<SessionWithRefreshTokensType | null>;
+    revokeSession(sessionId: string) : Promise<void>;
+    revokeAllUserSessions(userId: string) : Promise<void>;
 }
