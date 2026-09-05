@@ -2,22 +2,27 @@ import { NextFunction, Request, Response } from "express";
 import { ZodError, ZodObject } from "zod";
 import { AppError } from "../utils/common/errors/AppError.js";
 
-export const validate =
-  (schema: ZodObject, source: "body" | "query" | "params" = "body") =>
-  (req: Request, _res: Response, next: NextFunction) => {
-    try {
-      schema.parse(req[source]);
-      next();
-    } catch (error) {
-      if (error instanceof ZodError) {
-        throw new AppError(
-          error.issues
-            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-            .join(", "),
-          400,
-        );
-      }
+type validateTarget = "body" | "params" | "query";
 
-      next(error);
+export const validate =
+  (schema: ZodObject, target: validateTarget = "body") =>
+  (req: Request, _res: Response, next: NextFunction) => {
+    const data = req[target];
+    const result = schema.safeParse(data);
+
+    if (!result.success) {
+      const errors = result.error.issues.map((error) => ({
+        field: error.path.join(""),
+        message: error.message,
+      }));
+
+      throw new AppError(
+        errors.map((error) => `${error.field}: ${error.message}`).join(", "),
+        400,
+      );
     }
+
+    req[target] = result.data;
+
+    next();
   };
